@@ -1,0 +1,27 @@
+Using device: cpu
+Data loaded. Training samples: 12263, Validation samples: 3065
+
+Starting model training...
+Epoch 1/20.. Train Loss: 0.004937.. Val Loss: 0.002357
+Epoch 2/20.. Train Loss: 0.002001.. Val Loss: 0.001761
+Epoch 3/20.. Train Loss: 0.001616.. Val Loss: 0.001490
+Epoch 4/20.. Train Loss: 0.001410.. Val Loss: 0.001333
+Epoch 5/20.. Train Loss: 0.001281.. Val Loss: 0.001232
+Epoch 6/20.. Train Loss: 0.001188.. Val Loss: 0.001185
+Epoch 7/20.. Train Loss: 0.001116.. Val Loss: 0.001103
+Epoch 8/20.. Train Loss: 0.001051.. Val Loss: 0.001035
+Epoch 9/20.. Train Loss: 0.000999.. Val Loss: 0.000965
+Epoch 10/20.. Train Loss: 0.000957.. Val Loss: 0.000928
+Epoch 11/20.. Train Loss: 0.000920.. Val Loss: 0.000900
+Epoch 12/20.. Train Loss: 0.000888.. Val Loss: 0.000882
+Epoch 13/20.. Train Loss: 0.000861.. Val Loss: 0.000846
+Epoch 14/20.. Train Loss: 0.000838.. Val Loss: 0.000810
+Epoch 15/20.. Train Loss: 0.000817.. Val Loss: 0.000799
+Epoch 16/20.. Train Loss: 0.000797.. Val Loss: 0.000774
+Epoch 17/20.. Train Loss: 0.000781.. Val Loss: 0.000765
+Epoch 18/20.. Train Loss: 0.000765.. Val Loss: 0.000758
+Epoch 19/20.. Train Loss: 0.000751.. Val Loss: 0.000739
+Epoch 20/20.. Train Loss: 0.000739.. Val Loss: 0.000722
+
+Training complete. Model saved to 'anomaly_detector.pth'
+Training loss curve saved to 'training_loss_curve.png'

@@ -8,3 +8,13 @@ Pillow
 matplotlib
 scikit-learn
 PyYAML>=5.3.1
+ultralytics
+
+# Core YOLOv5 dependencies
+psutil
+requests
+scipy
+thop
+tqdm
+pandas
+seaborn

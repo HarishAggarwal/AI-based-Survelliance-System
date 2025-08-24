@@ -18,3 +18,4 @@ thop
 tqdm
 pandas
 seaborn
+scikit-image

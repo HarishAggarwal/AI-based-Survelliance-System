@@ -4,6 +4,10 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 
+# Suppress all warnings for a cleaner deployment
+import warnings
+warnings.filterwarnings("ignore")
+
 import sys
 from pathlib import Path
 import tempfile
@@ -41,7 +45,6 @@ IMG_SIZE_ANOMALY = (256, 256)
 CLASSES_TO_DETECT = [0, 24, 26, 28] # person, backpack, handbag, suitcase
 
 # --- PyTorch Autoencoder Model Definition ---
-# This class must match the architecture used during training
 class ConvAutoencoder(nn.Module):
     def __init__(self):
         super(ConvAutoencoder, self).__init__()
@@ -128,17 +131,13 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
 
         # --- ANOMALY DETECTION (PYTORCH AUTOENCODER) ---
         if anomaly_enabled:
-            # Preprocess frame for anomaly model
             input_tensor = anomaly_transform(frame).unsqueeze(0).to(device)
-            
             with torch.no_grad():
                 reconstructed_tensor = anomaly_model(input_tensor)
                 reconstruction_error = loss_function(reconstructed_tensor, input_tensor).item()
-            
             anomaly_scores.append(reconstruction_error)
-            
             if reconstruction_error > anomaly_thresh and len(alerts) < 100:
-                alerts.append(f"[Anomaly Alert] Unusual activity detected! Score: {reconstruction_error:.4f}")
+                alerts.append(f"[Anomaly Alert] Unusual activity! Score: {reconstruction_error:.4f}")
 
         # --- OBJECT DETECTION (YOLOv5) ---
         img_yolo = cv2.resize(frame, IMG_SIZE_YOLO)
@@ -173,7 +172,6 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
             final_tracks = []
 
         current_time = time.time()
-        # Full logic for loitering, abandonment, and drawing boxes...
         current_track_ids = {int(t[4]) for t in final_tracks}
         for tid in list(tracked_items.keys()):
             if tid not in current_track_ids: del tracked_items[tid]
@@ -212,9 +210,18 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
             annotator.box_label((int(x1), int(y1), int(x2), int(y2)), label, color=color)
         
         # --- UPDATE UI ---
-        video_placeholder.image(frame, channels="BGR", use_column_width=True)
+        video_placeholder.image(frame, channels="BGR", use_container_width=True)
+        
+        # **FIX 1: Display alerts in a compact list format**
         with alerts_log_placeholder.container():
-            for alert in reversed(alerts): st.warning(alert)
+            st.write("**Latest Alerts:**")
+            # Display the last 10 alerts
+            for alert in reversed(alerts[-10:]):
+                if "[Anomaly Alert]" in alert:
+                    st.markdown(f"🚨 {alert}")
+                else:
+                    st.markdown(f"⚠️ {alert}")
+        
         chart_placeholder.line_chart(np.array(anomaly_scores))
 
     cap.release()
@@ -222,7 +229,6 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
 # --- STREAMLIT APP UI ---
 st.title("Hybrid AI Surveillance System 🏆 (Full PyTorch)")
 st.sidebar.title("Settings")
-# ... (Rest of the UI code is identical to the previous version)
 conf_slider = st.sidebar.slider("Detection Confidence", 0.0, 1.0, 0.3, 0.05)
 iou_slider = st.sidebar.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
 st.sidebar.title("Rule-Based Alerts")
@@ -238,6 +244,7 @@ anomaly_thresh = st.sidebar.slider("Anomaly Sensitivity", 0.0005, 0.01, 0.002, 0
 st.sidebar.title("Video Source")
 uploaded_file = st.sidebar.file_uploader("Upload a video...", type=["mp4", "avi", "mov"])
 
+# --- Main Layout & Execution ---
 col1, col2 = st.columns([3, 1])
 with col1:
     st.header("Live Video Feed")
@@ -249,13 +256,19 @@ with col2:
     alerts_log_placeholder = st.empty()
 
 if st.sidebar.button("Start Analysis"):
-    video_path = 'yolov5/data/people-walking.mp4'
+    video_path = 'yolov5/data/people-walking.mp4' # Default video
+    tfile = None
     if uploaded_file is not None:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tfile:
-            tfile.write(uploaded_file.read())
-            video_path = tfile.name
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        tfile.write(uploaded_file.read())
+        video_path = tfile.name
     
     st.info(f"Starting analysis on video: {os.path.basename(video_path)}")
-    process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh)
+    try:
+        process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh)
+    finally:
+        if tfile is not None:
+            tfile.close()
+            os.remove(tfile.name)
 else:
     st.info("Adjust settings in the sidebar and click 'Start Analysis'")

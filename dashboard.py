@@ -30,7 +30,8 @@ if str(YOLOv5_ROOT) not in sys.path:
 
 from models.common import DetectMultiBackend
 from utils.general import (check_img_size, non_max_suppression, scale_boxes)
-from utils.plots import Annotator, colors
+# **FIX: Import 'colors' directly, remove 'Annotator'**
+from utils.plots import colors
 from utils.torch_utils import select_device
 from sort import *
 
@@ -105,7 +106,6 @@ yolo_names = yolo_model.names
 device = select_device('')
 
 # --- Main Video Processing Function ---
-# **FIX: Pass UI placeholders as arguments**
 def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh, video_placeholder, alerts_log_placeholder, chart_placeholder):
     mot_tracker = Sort()
     tracked_items = {}
@@ -129,7 +129,6 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
             break
 
         frame_count += 1
-        # **NEW: Only run AI on every Nth frame**
         if frame_count % FRAME_SKIP == 0:
             # --- ANOMALY DETECTION (PYTORCH AUTOENCODER) ---
             if anomaly_enabled:
@@ -152,8 +151,6 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
 
             pred = yolo_model(img_yolo, augment=False, visualize=False)
             pred = non_max_suppression(pred, conf_slider, iou_slider, classes=CLASSES_TO_DETECT, agnostic=False)
-
-            annotator = Annotator(frame, line_width=2, example=str(yolo_names))
             
             original_detections = []
             for i, det in enumerate(pred):
@@ -207,10 +204,14 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
                                 alerts.append(f"[Rule Alert] Object {yolo_names[cls]} (ID: {track_id}) may be abandoned!")
                                 tracked_items[track_id]['alert_triggered'] = True
                 
+                # **FIX: Use direct OpenCV drawing instead of Annotator**
                 label = f'{yolo_names[cls]} ID:{track_id}'
                 color = colors(cls, True) if not tracked_items[track_id]['alert_triggered'] else (0, 0, 255)
-                annotator.box_label((int(x1), int(y1), int(x2), int(y2)), label, color=color)
-        
+                # Bounding box
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                # Text label
+                cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
         # --- UPDATE UI (on every frame) ---
         video_placeholder.image(frame, channels="BGR", use_container_width=True)
         
@@ -265,7 +266,6 @@ if st.sidebar.button("Start Analysis"):
     
     st.info(f"Starting analysis on video: {os.path.basename(video_path)}")
     try:
-        # **FIX: Pass placeholders to the processing function**
         process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh, video_placeholder, alerts_log_placeholder, chart_placeholder)
     finally:
         if tfile is not None:

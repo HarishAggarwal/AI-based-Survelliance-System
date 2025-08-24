@@ -43,6 +43,7 @@ ANOMALY_MODEL_PATH = 'anomaly_detector.pth' # Using the PyTorch model
 IMG_SIZE_YOLO = (640, 640)
 IMG_SIZE_ANOMALY = (256, 256)
 CLASSES_TO_DETECT = [0, 24, 26, 28] # person, backpack, handbag, suitcase
+FRAME_SKIP = 5 # **NEW: Process every 5th frame for performance**
 
 # --- PyTorch Autoencoder Model Definition ---
 class ConvAutoencoder(nn.Module):
@@ -104,7 +105,8 @@ yolo_names = yolo_model.names
 device = select_device('')
 
 # --- Main Video Processing Function ---
-def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh):
+# **FIX: Pass UI placeholders as arguments**
+def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh, video_placeholder, alerts_log_placeholder, chart_placeholder):
     mot_tracker = Sort()
     tracked_items = {}
     alerts = []
@@ -118,10 +120,7 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
     loss_function = nn.MSELoss()
 
     cap = cv2.VideoCapture(video_path)
-    
-    video_placeholder = st.empty()
-    alerts_log_placeholder = st.empty()
-    chart_placeholder = st.empty()
+    frame_count = 0
     
     while cap.isOpened():
         ret, frame = cap.read()
@@ -129,93 +128,94 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
             st.write("The video has ended.")
             break
 
-        # --- ANOMALY DETECTION (PYTORCH AUTOENCODER) ---
-        if anomaly_enabled:
-            input_tensor = anomaly_transform(frame).unsqueeze(0).to(device)
-            with torch.no_grad():
-                reconstructed_tensor = anomaly_model(input_tensor)
-                reconstruction_error = loss_function(reconstructed_tensor, input_tensor).item()
-            anomaly_scores.append(reconstruction_error)
-            if reconstruction_error > anomaly_thresh and len(alerts) < 100:
-                alerts.append(f"[Anomaly Alert] Unusual activity! Score: {reconstruction_error:.4f}")
+        frame_count += 1
+        # **NEW: Only run AI on every Nth frame**
+        if frame_count % FRAME_SKIP == 0:
+            # --- ANOMALY DETECTION (PYTORCH AUTOENCODER) ---
+            if anomaly_enabled:
+                input_tensor = anomaly_transform(frame).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    reconstructed_tensor = anomaly_model(input_tensor)
+                    reconstruction_error = loss_function(reconstructed_tensor, input_tensor).item()
+                anomaly_scores.append(reconstruction_error)
+                if reconstruction_error > anomaly_thresh and len(alerts) < 100:
+                    alerts.append(f"[Anomaly Alert] Unusual activity! Score: {reconstruction_error:.4f}")
 
-        # --- OBJECT DETECTION (YOLOv5) ---
-        img_yolo = cv2.resize(frame, IMG_SIZE_YOLO)
-        img_yolo = img_yolo.transpose((2, 0, 1))[::-1]
-        img_yolo = np.ascontiguousarray(img_yolo)
-        img_yolo = torch.from_numpy(img_yolo).to(device)
-        img_yolo = img_yolo.half() if yolo_model.fp16 else img_yolo.float()
-        img_yolo /= 255.0
-        if len(img_yolo.shape) == 3: img_yolo = img_yolo[None]
+            # --- OBJECT DETECTION (YOLOv5) ---
+            img_yolo = cv2.resize(frame, IMG_SIZE_YOLO)
+            img_yolo = img_yolo.transpose((2, 0, 1))[::-1]
+            img_yolo = np.ascontiguousarray(img_yolo)
+            img_yolo = torch.from_numpy(img_yolo).to(device)
+            img_yolo = img_yolo.half() if yolo_model.fp16 else img_yolo.float()
+            img_yolo /= 255.0
+            if len(img_yolo.shape) == 3: img_yolo = img_yolo[None]
 
-        pred = yolo_model(img_yolo, augment=False, visualize=False)
-        pred = non_max_suppression(pred, conf_slider, iou_slider, classes=CLASSES_TO_DETECT, agnostic=False)
+            pred = yolo_model(img_yolo, augment=False, visualize=False)
+            pred = non_max_suppression(pred, conf_slider, iou_slider, classes=CLASSES_TO_DETECT, agnostic=False)
 
-        annotator = Annotator(frame, line_width=2, example=str(yolo_names))
-        
-        original_detections = []
-        for i, det in enumerate(pred):
-            if len(det):
-                det[:, :4] = scale_boxes(img_yolo.shape[2:], det[:, :4], frame.shape).round()
-                for *xyxy, conf, cls in reversed(det):
-                    original_detections.append([*xyxy, conf, cls])
-
-        # --- TRACKING & RULE-BASED LOGIC ---
-        detections_for_sort = np.array([[*d[:4], d[4]] for d in original_detections]) if original_detections else np.empty((0, 5))
-        track_bbs_ids = mot_tracker.update(detections_for_sort)
-
-        if len(track_bbs_ids) > 0 and len(original_detections) > 0:
-            iou = iou_batch(track_bbs_ids[:,:4], np.array(original_detections)[:,:4])
-            best_match_indices = np.argmax(iou, axis=1)
-            final_tracks = [np.append(track, original_detections[best_match_indices[i]][5]) for i, track in enumerate(track_bbs_ids) if iou[i, best_match_indices[i]] > 0.3]
-        else:
-            final_tracks = []
-
-        current_time = time.time()
-        current_track_ids = {int(t[4]) for t in final_tracks}
-        for tid in list(tracked_items.keys()):
-            if tid not in current_track_ids: del tracked_items[tid]
-
-        for track in final_tracks:
-            x1, y1, x2, y2, track_id, cls = track
-            track_id, cls = int(track_id), int(cls)
-            center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
+            annotator = Annotator(frame, line_width=2, example=str(yolo_names))
             
-            if track_id not in tracked_items:
-                tracked_items[track_id] = {'class': cls, 'positions': [], 'start_time': current_time, 'alert_triggered': False}
-            
-            tracked_items[track_id]['positions'].append((center_x, center_y))
+            original_detections = []
+            for i, det in enumerate(pred):
+                if len(det):
+                    det[:, :4] = scale_boxes(img_yolo.shape[2:], det[:, :4], frame.shape).round()
+                    for *xyxy, conf, cls in reversed(det):
+                        original_detections.append([*xyxy, conf, cls])
 
-            if loitering_enabled and cls == 0 and not tracked_items[track_id]['alert_triggered']:
-                start_point = tracked_items[track_id]['positions'][0]
-                elapsed_time = current_time - tracked_items[track_id]['start_time']
-                distance = math.sqrt((center_x - start_point[0])**2 + (center_y - start_point[1])**2)
-                if elapsed_time > loitering_time and distance < loitering_dist:
-                    alerts.append(f"[Rule Alert] Person {track_id} is loitering!")
-                    tracked_items[track_id]['alert_triggered'] = True
+            # --- TRACKING & RULE-BASED LOGIC ---
+            detections_for_sort = np.array([[*d[:4], d[4]] for d in original_detections]) if original_detections else np.empty((0, 5))
+            track_bbs_ids = mot_tracker.update(detections_for_sort)
 
-            if abandon_enabled and cls != 0 and not tracked_items[track_id]['alert_triggered']:
-                if len(tracked_items[track_id]['positions']) > 10:
+            if len(track_bbs_ids) > 0 and len(original_detections) > 0:
+                iou = iou_batch(track_bbs_ids[:,:4], np.array(original_detections)[:,:4])
+                best_match_indices = np.argmax(iou, axis=1)
+                final_tracks = [np.append(track, original_detections[best_match_indices[i]][5]) for i, track in enumerate(track_bbs_ids) if iou[i, best_match_indices[i]] > 0.3]
+            else:
+                final_tracks = []
+
+            current_time = time.time()
+            current_track_ids = {int(t[4]) for t in final_tracks}
+            for tid in list(tracked_items.keys()):
+                if tid not in current_track_ids: del tracked_items[tid]
+
+            for track in final_tracks:
+                x1, y1, x2, y2, track_id, cls = track
+                track_id, cls = int(track_id), int(cls)
+                center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
+                
+                if track_id not in tracked_items:
+                    tracked_items[track_id] = {'class': cls, 'positions': [], 'start_time': current_time, 'alert_triggered': False}
+                
+                tracked_items[track_id]['positions'].append((center_x, center_y))
+
+                if loitering_enabled and cls == 0 and not tracked_items[track_id]['alert_triggered']:
                     start_point = tracked_items[track_id]['positions'][0]
+                    elapsed_time = current_time - tracked_items[track_id]['start_time']
                     distance = math.sqrt((center_x - start_point[0])**2 + (center_y - start_point[1])**2)
-                    if distance < 10:
-                        is_person_near = any(math.sqrt((center_x - p_data['positions'][-1][0])**2 + (center_y - p_data['positions'][-1][1])**2) < abandon_dist for p_id, p_data in tracked_items.items() if p_data['class'] == 0)
-                        elapsed_time = current_time - tracked_items[track_id]['start_time']
-                        if not is_person_near and elapsed_time > abandon_time:
-                            alerts.append(f"[Rule Alert] Object {yolo_names[cls]} (ID: {track_id}) may be abandoned!")
-                            tracked_items[track_id]['alert_triggered'] = True
-            
-            label = f'{yolo_names[cls]} ID:{track_id}'
-            color = colors(cls, True) if not tracked_items[track_id]['alert_triggered'] else (0, 0, 255)
-            annotator.box_label((int(x1), int(y1), int(x2), int(y2)), label, color=color)
+                    if elapsed_time > loitering_time and distance < loitering_dist:
+                        alerts.append(f"[Rule Alert] Person {track_id} is loitering!")
+                        tracked_items[track_id]['alert_triggered'] = True
+
+                if abandon_enabled and cls != 0 and not tracked_items[track_id]['alert_triggered']:
+                    if len(tracked_items[track_id]['positions']) > 10:
+                        start_point = tracked_items[track_id]['positions'][0]
+                        distance = math.sqrt((center_x - start_point[0])**2 + (center_y - start_point[1])**2)
+                        if distance < 10:
+                            is_person_near = any(math.sqrt((center_x - p_data['positions'][-1][0])**2 + (center_y - p_data['positions'][-1][1])**2) < abandon_dist for p_id, p_data in tracked_items.items() if p_data['class'] == 0)
+                            elapsed_time = current_time - tracked_items[track_id]['start_time']
+                            if not is_person_near and elapsed_time > abandon_time:
+                                alerts.append(f"[Rule Alert] Object {yolo_names[cls]} (ID: {track_id}) may be abandoned!")
+                                tracked_items[track_id]['alert_triggered'] = True
+                
+                label = f'{yolo_names[cls]} ID:{track_id}'
+                color = colors(cls, True) if not tracked_items[track_id]['alert_triggered'] else (0, 0, 255)
+                annotator.box_label((int(x1), int(y1), int(x2), int(y2)), label, color=color)
         
-        # --- UPDATE UI ---
+        # --- UPDATE UI (on every frame) ---
         video_placeholder.image(frame, channels="BGR", use_container_width=True)
         
-        # **FIX 1: Display alerts in a compact list format**
         with alerts_log_placeholder.container():
             st.write("**Latest Alerts:**")
-            # Display the last 10 alerts
             for alert in reversed(alerts[-10:]):
                 if "[Anomaly Alert]" in alert:
                     st.markdown(f"🚨 {alert}")
@@ -265,7 +265,8 @@ if st.sidebar.button("Start Analysis"):
     
     st.info(f"Starting analysis on video: {os.path.basename(video_path)}")
     try:
-        process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh)
+        # **FIX: Pass placeholders to the processing function**
+        process_video(video_path, conf_slider, iou_slider, loitering_enabled, loitering_time, loitering_dist, abandon_enabled, abandon_time, abandon_dist, anomaly_enabled, anomaly_thresh, video_placeholder, alerts_log_placeholder, chart_placeholder)
     finally:
         if tfile is not None:
             tfile.close()

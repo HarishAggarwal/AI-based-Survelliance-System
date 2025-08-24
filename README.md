@@ -3,6 +3,20 @@ Hybrid AI Surveillance System: A Smart Co-Pilot for Security
 
 Welcome to the repository for our AI-powered surveillance system, built for the Honeywell Hackathon. This project is more than just a program; it's a proof-of-concept for a smarter, more efficient future in security monitoring. We've created a system that acts as an intelligent co-pilot, watching video feeds to detect both known and unknown threats in real-time.
 
+Credits and Acknowledgments
+---------------------------
+
+This project builds upon excellent open-source work and research datasets:
+
+*   **YOLOv5**: This project uses the YOLOv5 object detection model as its foundation. YOLOv5 is developed and maintained by [Ultralytics](https://github.com/ultralytics/yolov5). We have adapted and extended their repository to meet our specific surveillance requirements.
+    
+*   **Avenue Dataset**: Our anomaly detection model is trained using the Avenue Dataset for abnormal event detection in video surveillance. This dataset was created by researchers at The Chinese University of Hong Kong.
+    
+    *   **Citation**: Lu, Cewu, Jianping Shi, and Jiaya Jia. "Abnormal event detection at 150 fps in matlab." Proceedings of the IEEE international conference on computer vision. 2013.
+        
+    *   **Dataset Link**: https://www.cse.cuhk.edu.hk/leojia/projects/detectabnormal/dataset.html
+        
+
 The Challenge: Seeing Everything, All the Time
 ----------------------------------------------
 
@@ -15,7 +29,7 @@ Instead of relying on a single approach, we built a **hybrid AI system** that co
 
 ### 🧠 Model 1: The Rule-Based Guard (YOLOv5)
 
-This is our precision expert. It's trained to find specific things we tell it to look for. Using the powerful **YOLOv5** object detector and a **SORT tracker**, it identifies and follows every person and bag in the frame. We then built custom logic on top of this to enforce specific rules:
+This is our precision expert. It's trained to find specific things we tell it to look for. Using the powerful **YOLOv5** object detector (courtesy of Ultralytics) and a **SORT tracker**, it identifies and follows every person and bag in the frame. We then built custom logic on top of this to enforce specific rules:
 
 *   **Loitering Detection**: Is a person lingering in a sensitive area for too long?
     
@@ -31,7 +45,7 @@ The Journey: What I've Done, Step-by-Step
 
 Building this system was an exciting journey through the entire machine learning pipeline.
 
-1.  **Phase 1: Foundation & Object Tracking**My first step was to get a basic object detector running. I set up the **YOLOv5** environment and successfully ran it on sample images and videos. I then integrated the **SORT tracking algorithm**, modifying the core detection script to assign a persistent ID to every person it saw. This was the crucial foundation for all subsequent logic.
+1.  **Phase 1: Foundation & Object Tracking**My first step was to get a basic object detector running. I forked and adapted the **YOLOv5** repository from Ultralytics, setting up the environment and successfully running it on sample images and videos. I then integrated the **SORT tracking algorithm**, modifying the core detection script to assign a persistent ID to every person it saw. This was the crucial foundation for all subsequent logic.
     
 2.  **Phase 2: Building the Rules**With tracking in place, I developed the logic for our rule-based alerts. I created a system to monitor the position and duration of each tracked ID, triggering a "loitering" alert if it stayed within a small area for too long. I then expanded this to detect "object abandonment" by analyzing the proximity between stationary objects (like backpacks) and people.
     
@@ -66,7 +80,7 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 Before you can run the dashboard, you need to prepare the data and train the anomaly model._(Note: A pre-trained anomaly\_detector.pth is included, so you can skip these steps if you just want to run the demo.)_
 
-**Download the Avenue Dataset** and place the training videos in the avenue\_dataset/training\_videos/ folder.
+**Download the Avenue Dataset** from https://www.cse.cuhk.edu.hk/leojia/projects/detectabnormal/dataset.html and place the training videos in the avenue\_dataset/training\_videos/ folder.
 
 **Run the preparation script:**
 
@@ -74,7 +88,7 @@ Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQL
 
 **Run the training script:**
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   python train_autoencoder_pytorch.py   `
+Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   python train_autoencoder.py   `
 
 ### 4\. Launch the Dashboard
 
@@ -83,18 +97,3 @@ Now, you're ready to start the surveillance system.
 Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   streamlit run dashboard.py   `
 
 A new tab should open in your web browser with the application. Use the sidebar to configure your settings and click **"Start Analysis"**.
-
-Technologies Used
------------------
-
-*   **Python**
-    
-*   **PyTorch** (for both YOLOv5 and the Autoencoder)
-    
-*   **OpenCV** (for all video and image processing)
-    
-*   **Streamlit** (for the interactive web dashboard)
-    
-*   **SORT** (for real-time object tracking)
-    
-*   **NumPy**, **Pillow**, **Matplotlib**

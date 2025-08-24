@@ -7,6 +7,9 @@ matplotlib
 numpy
 Pillow
 ultralytics==8.3.184
+scikit-image==0.24.0
+pandas
+seaborn
 
 # YOLOv5 requirements
 # Usage: pip install -r requirements.txt

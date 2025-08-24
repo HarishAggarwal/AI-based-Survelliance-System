@@ -6,3 +6,4 @@ scikit-learn
 matplotlib
 numpy
 Pillow
+ultralytics==8.3.184

@@ -54,6 +54,7 @@ setuptools>=70.0.0 # Snyk vulnerability fix
 streamlit
 opencv-python-headless
 scikit-learn
+filterpy
 
 # Core YOLOv5 dependencies
 scikit-image

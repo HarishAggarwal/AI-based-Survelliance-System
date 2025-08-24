@@ -30,7 +30,6 @@ if str(YOLOv5_ROOT) not in sys.path:
 
 from models.common import DetectMultiBackend
 from utils.general import (check_img_size, non_max_suppression, scale_boxes)
-# **FIX: Import 'colors' directly, remove 'Annotator'**
 from utils.plots import colors
 from utils.torch_utils import select_device
 from sort import *
@@ -44,7 +43,7 @@ ANOMALY_MODEL_PATH = 'anomaly_detector.pth' # Using the PyTorch model
 IMG_SIZE_YOLO = (640, 640)
 IMG_SIZE_ANOMALY = (256, 256)
 CLASSES_TO_DETECT = [0, 24, 26, 28] # person, backpack, handbag, suitcase
-FRAME_SKIP = 5 # **NEW: Process every 5th frame for performance**
+FRAME_SKIP = 5 # Process every 5th frame for performance
 
 # --- PyTorch Autoencoder Model Definition ---
 class ConvAutoencoder(nn.Module):
@@ -204,12 +203,9 @@ def process_video(video_path, conf_slider, iou_slider, loitering_enabled, loiter
                                 alerts.append(f"[Rule Alert] Object {yolo_names[cls]} (ID: {track_id}) may be abandoned!")
                                 tracked_items[track_id]['alert_triggered'] = True
                 
-                # **FIX: Use direct OpenCV drawing instead of Annotator**
                 label = f'{yolo_names[cls]} ID:{track_id}'
                 color = colors(cls, True) if not tracked_items[track_id]['alert_triggered'] else (0, 0, 255)
-                # Bounding box
                 cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-                # Text label
                 cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # --- UPDATE UI (on every frame) ---
@@ -257,6 +253,9 @@ with col2:
     alerts_log_placeholder = st.empty()
 
 if st.sidebar.button("Start Analysis"):
+    # **NEW: Add a toast notification for performance**
+    st.toast("Analysis started! Performance may be slow on the free server.", icon="⚙️")
+    
     video_path = 'yolov5/data/people-walking.mp4' # Default video
     tfile = None
     if uploaded_file is not None:
@@ -272,4 +271,5 @@ if st.sidebar.button("Start Analysis"):
             tfile.close()
             os.remove(tfile.name)
 else:
-    st.info("Adjust settings in the sidebar and click 'Start Analysis'")
+    # **NEW: Add performance note to the initial info box**
+    st.info("Adjust settings in the sidebar and click 'Start Analysis'. Note: This app runs two deep learning models on a free CPU; performance may be slow.")
